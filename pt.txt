@@ -1,92 +1,31 @@
-Полная инструкция по использованию команд для настройки виртуальных машин
-
-## Файл 01 [[Образование/Колледж/Мдк/Демо/модуль 1/ISP|ISP]]
-
-### Назначение файла
-
-Настройка маршрутизатора ISP, который имитирует провайдера и обеспечивает доступ в интернет для сетей HQ и BR.
-
----
+ISP
 
 1. Установка имени хоста
 
-```bash
 hostnamectl hostname ISP
-```
 
-· hostnamectl – утилита для управления системными настройками, включая имя хоста.
-· hostname ISP – устанавливает имя хоста (hostname) на ISP.
-· Зачем: Идентификация устройства в сети, используется в логах, запросах DNS и т.д.
-
-```bash
 exec bash
-```
-
-· exec – заменяет текущий процесс новым (в данном случае – оболочкой bash).
-· Зачем: Для применения изменений окружения (например, обновления переменной $HOSTNAME).
-
----
 
 2. Проверка конфигурации интерфейса
 
-```bash
 cat /etc/net/ifaces/enp7s1/options
-```
-
-· cat – выводит содержимое файла.
-· /etc/net/ifaces/enp7s1/options – файл конфигурации сетевого интерфейса enp7s1.
-· Зачем: Убедиться, что интерфейс имеет правильный тип (например, TYPE=eth).
-
----
 
 3. Создание структуры каталогов для интерфейсов
 
-```bash
 mkdir -p /etc/net/ifaces/enp7s{2,3}
-```
-
-· mkdir -p – создаёт каталог и все необходимые родительские каталоги (если их нет).
-· enp7s{2,3} – шаблон, раскрывается в enp7s2 и enp7s3.
-· Зачем: Для хранения конфигурационных файлов каждого интерфейса в отдельном каталоге (стандарт ALT Linux).
-
-```bash
 echo 'TYPE=eth' | tee /etc/net/ifaces/enp7s{2,3}/options
-```
-
-· echo – выводит текст.
-· tee – записывает в файл и одновременно выводит на экран.
-· Зачем: Устанавливает тип интерфейса как Ethernet для enp7s2 и enp7s3.
-
----
 
 4. Настройка IP-адресов
 
-```bash
 echo '172.16.1.1/28' > /etc/net/ifaces/enp7s2/ipv4address
 echo '172.16.2.1/28' > /etc/net/ifaces/enp7s3/ipv4address
-```
-
-· > – перенаправление вывода в файл (перезаписывает).
-· /etc/net/ifaces/.../ipv4address – файл, содержащий IP-адрес и маску подсети.
-· Зачем: Назначение статических IP-адресов интерфейсам для связи с HQ-RTR и BR-RTR.
-
----
 
 5. Установка и настройка nftables
 
-```bash
 apt-get update && apt-get install nftables -y
-```
-
-· apt-get update – обновляет список доступных пакетов.
-· apt-get install nftables -y – устанавливает пакет nftables без запроса подтверждения.
-· Зачем: Для настройки межсетевого экрана и трансляции адресов (NAT).
-
----
 
 6. Создание конфигурации nftables для NAT
 
-```bash
 cat << EOF > /etc/nftables/nftables.nft
 #!/usr/sbin/nft -f
 flush ruleset
@@ -97,141 +36,44 @@ table ip nat {
  }
 }
 EOF
-```
-
-· cat << EOF > файл – записывает многострочный текст (here-doc) в файл.
-· #!/usr/sbin/nft -f – shebang, указывает интерпретатор для скрипта.
-· flush ruleset – очищает все текущие правила nftables.
-· table ip nat – создаёт таблицу NAT для IPv4.
-· chain postrouting – цепочка для пост-маршрутизации.
-· type nat hook postrouting priority srcnat – определяет тип цепочки и место в обработке пакетов.
-· oifname "enp7s1" masquerade – включает маскарадинг (динамический NAT) для исходящего интерфейса enp7s1.
-· Зачем: Чтобы внутренние сети (HQ, BR) могли выходить в интернет через ISP.
-
-```bash
 cat /etc/nftables/nftables.nft
-```
-
-· Зачем: Проверка корректности записанного конфигурационного файла.
-
-```bash
 systemctl enable --now nftables
-```
-
-· systemctl enable – добавляет службу в автозагрузку.
-· --now – сразу запускает службу.
-· Зачем: Активация и автозапуск nftables.
-
----
 
 7. Включение IP-форвардинга
 
-```bash
 sed -i 's/net.ipv4.ip_forward = 0/net.ipv4.ip_forward = 1/' /etc/net/sysctl.conf
-```
-
-· sed -i – редактирует файл на месте.
-· s/старое/новое/ – команда замены.
-· Зачем: Включает маршрутизацию IPv4 между сетевыми интерфейсами.
-
-```bash
 systemctl restart network
-```
-
-· Зачем: Применение изменений в сетевых настройках.
-
-```bash
 sysctl net.ipv4.ip_forward
-```
 
-· sysctl – выводит или изменяет параметры ядра.
-· Зачем: Проверка, что IP-форвардинг включён (должно быть 1).
-
----
-
-## Файл 02 [[BR-RTR]]
-
-Назначение файла
-
-Настройка маршрутизатора BR (филиал), включая базовую сеть, GRE-туннель, OSPF и NAT.
-
----
+BR-RTR
 
 1. Установка имени хоста
 
-```bash
 hostnamectl hostname br-rtr.au-team.irpo
-```
 
-· Зачем: Установка FQDN (полного доменного имени) для устройства.
-· Примечание: Аналогично команде в ISP.txt.
-
-```bash
 exec bash
-```
-
-· Примечание: См. объяснение в ISP.txt.
-
----
 
 2. Создание структуры каталогов интерфейсов
 
-```bash
 mkdir -p /etc/net/ifaces/{enp7s{1,2},gre1}
-```
-
-· Зачем: Создание каталогов для физических интерфейсов и GRE-туннеля.
-
-```bash
 echo 'TYPE=eth' | tee /etc/net/ifaces/enp7s{1,2}/options
-```
-
-· Примечание: См. объяснение в ISP.txt.
-
----
 
 3. Настройка интерфейса к ISP
 
-```bash
 echo '172.16.2.2/28' > /etc/net/ifaces/enp7s1/ipv4address
 echo 'default via 172.16.2.1' > /etc/net/ifaces/enp7s1/ipv4route
-```
-
-· ipv4route – файл маршрута по умолчанию (шлюз).
-· Зачем: Назначение IP-адреса и шлюза для выхода в интернет.
-
-```bash
 echo 'nameserver 8.8.8.8' > /etc/net/ifaces/enp7s1/resolv.conf
-```
-
-· resolv.conf – файл конфигурации DNS.
-· Зачем: Указание DNS-сервера (Google Public DNS).
-
----
 
 4. Настройка интерфейса к BR-SRV
 
-```bash
 echo '192.168.1.1/28' > /etc/net/ifaces/enp7s2/ipv4address
-```
-
-· Зачем: Назначение адреса для локальной сети филиала.
-
----
 
 5. Включение IP-форвардинга
 
-```bash
 sed -i 's/net.ipv4.ip_forward = 0/net.ipv4.ip_forward = 1/' /etc/net/sysctl.conf
-```
-
-· Примечание: См. объяснение в ISP.txt.
-
----
 
 6. Настройка GRE-туннеля
 
-```bash
 cat << EOF > /etc/net/ifaces/gre1/options
 TYPE=iptun
 TUNTYPE=gre
@@ -240,369 +82,121 @@ TUNREMOTE=172.16.1.2
 TUNTTL=64
 TUNOPTIONS='ttl 64'
 EOF
-```
-
-· TYPE=iptun – указывает, что интерфейс туннельный.
-· TUNTYPE=gre – тип туннеля GRE.
-· TUNLOCAL – локальный IP-адрес для туннеля.
-· TUNREMOTE – удалённый IP-адрес (на HQ-RTR).
-· TUNTTL – время жизни пакетов в туннеле.
-· Зачем: Создание защищённого туннеля между офисами для передачи трафика.
-
-```bash
 cat /etc/net/ifaces/gre1/options
-```
-
-· Зачем: Проверка конфигурации.
-
-```bash
 echo "10.10.10.2/30" > /etc/net/ifaces/gre1/ipv4address
-```
-
-· Зачем: Назначение внутреннего IP-адреса туннельному интерфейсу.
-
-```bash
 systemctl restart network
-```
-
-· Зачем: Применение сетевых настроек.
-
-```bash
 ip -br -c a
-```
-
-· ip -br -c a – краткий цветной вывод IP-адресов интерфейсов.
-· Зачем: Проверка корректности настройки всех интерфейсов.
-
----
 
 7. Установка необходимого ПО
 
-```bash
 apt-get update && apt-get install sudo tzdata frr nftables -y
-```
-
-· sudo – утилита для выполнения команд с правами root.
-· tzdata – база данных временных зон.
-· frr – пакет для динамической маршрутизации (OSPF, BGP и др.).
-· Зачем: Подготовка системы для маршрутизации и управления.
-
----
 
 8. Настройка DNS
 
-```bash
 rm -f /etc/net/ifaces/enp7s1/resolv.conf
-```
 
-· rm -f – удаляет файл без подтверждения.
-· Зачем: Удаление старого DNS-сервера (Google), так как будет использоваться внутренний.
-
-```bash
 echo $'search au-team.irpo\nnameserver 192.168.100.2' > /etc/net/ifaces/enp7s2/resolv.conf
-```
-
-· search – суффикс домена для поиска имён.
-· Зачем: Указание внутреннего DNS-сервера HQ-SRV для разрешения имён.
-
----
 
 9. Настройка NAT (nftables)
 
-· Примечание: Аналогично ISP.txt, но для интерфейса enp7s1 BR-RTR.
-
----
+Примечание: Аналогично ISP.txt, но для интерфейса enp7s1 BR-RTR.
 
 10. Установка временной зоны
 
-```bash
-timedatectl set-timezone Europe/Moscow
-```
-
-· Зачем: Установка правильной временной зоны для логов и синхронизации.
-
----
+timedatectl set-timezone Asia/Yekaterinburg
 
 11. Создание пользователя net_admin
 
-```bash
 useradd net_admin
-```
-
-· useradd – создаёт нового пользователя.
-· Зачем: Создание учётной записи администратора.
-
-```bash
 echo "net_admin:P@ssw0rd" | chpasswd
-```
-
-· chpasswd – изменяет пароли в пакетном режиме.
-· Зачем: Установка пароля для пользователя.
-
-```bash
 usermod -aG wheel net_admin
-```
-
-· usermod -aG – добавляет пользователя в группу.
-· wheel – группа, члены которой могут выполнять sudo.
-· Зачем: Предоставление прав администратора.
-
-```bash
 echo "WHEEL_USERS ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/net_admin
-```
-
-· /etc/sudoers.d/ – каталог для дополнительных правил sudo.
-· Зачем: Разрешение выполнять любые команды через sudo без пароля.
-
-```bash
 su -l net_admin
-```
-
-· su -l – переключение на пользователя с загрузкой его окружения.
-· Зачем: Проверка входа под новым пользователем.
-
-```bash
 sudo id
-```
-
-· id – выводит информацию о пользователе и группах.
-· Зачем: Проверка, что sudo работает без пароля и показывает UID=0 (root).
-
----
 
 12. Настройка OSPF (FRR)
 
-```bash
 sed -i 's/ospfd=no/ospfd=yes/' /etc/frr/daemons
-```
-
-· Зачем: Включение демона OSPF в FRR.
-
-```bash
 grep ospf /etc/frr/daemons
-```
-
-· Зачем: Проверка изменения.
-
-```bash
 cat <<'EOF' > /etc/frr/frr.conf
-```
-
-· Зачем: Создание конфигурации OSPF.
-· interface gre1 – настройка OSPF на туннельном интерфейсе.
-· ip ospf authentication – включение аутентификации.
-· ip ospf authentication-key P@ssw0rd – установка ключа аутентификации.
-· no ip ospf passive – интерфейс активен в OSPF.
-· interface enp7s2 – настройка OSPF на интерфейсе к BR-SRV.
-· router ospf – вход в режим конфигурации OSPF.
-· passive-interface default – все интерфейсы по умолчанию пассивные (не рассылают OSPF hello).
-· Зачем: Обмен маршрутами между HQ и BR через туннель.
-
-```bash
 systemctl restart network
 systemctl enable --now nftables frr
-```
-
-· Зачем: Применение настроек и автозапуск служб.
-
-```bash
 cat /etc/resolv.conf
-```
-
-· Зачем: Проверка DNS-настроек.
-
-```bash
 ip r
-```
 
-· ip r – вывод таблицы маршрутизации.
-· Зачем: Проверка наличия маршрутов, в т.ч. через OSPF.
-
----
-
-## Файл 03 [[HQ-RTR]]
-
-Назначение файла
-
-Настройка основного маршрутизатора HQ, включая VLAN, GRE, OSPF, DHCP и NAT.
-
----
+HQ-RTR
 
 1. Установка имени хоста
 
-```bash
 hostnamectl hostname hq-rtr.au-team.irpo
 exec bash
-```
-
-· Примечание: См. объяснение в BR-RTR.txt.
-
----
 
 2. Создание структуры каталогов интерфейсов
 
-```bash
 mkdir -p /etc/net/ifaces/{enp7s{1,2},vlan{100,200,999},gre1}
-```
-
-· vlan{100,200,999} – создаёт каталоги для VLAN-интерфейсов.
-· Зачем: Для настройки VLAN 100 (серверы), 200 (клиенты) и 999 (управление).
-
-```bash
 echo 'TYPE=eth' | tee /etc/net/ifaces/enp7s{1,2}/options
-```
-
-· Примечание: См. объяснение в ISP.txt.
-
----
 
 3. Настройка интерфейса к ISP
 
-```bash
 echo '172.16.1.2/28' > /etc/net/ifaces/enp7s1/ipv4address
 echo 'default via 172.16.1.1' > /etc/net/ifaces/enp7s1/ipv4route
 echo 'nameserver 8.8.8.8' > /etc/net/ifaces/enp7s1/resolv.conf
-```
-
-· Примечание: Аналогично BR-RTR.txt.
-
----
 
 4. Настройка VLAN
 
-```bash
 echo $'100\n200\n999' | xargs -i bash -c 'echo -e "TYPE=vlan\nHOST=enp7s2\nVID={}" > /etc/net/ifaces/vlan{}/options'
-```
-
-· xargs -i – передаёт каждую строку ввода в команду, заменяя {}.
-· TYPE=vlan – указывает тип интерфейса как VLAN.
-· HOST=enp7s2 – физический интерфейс, на котором работает VLAN.
-· VID – идентификатор VLAN.
-· Зачем: Создание конфигурационных файлов для каждого VLAN.
-
-```bash
 cat /etc/net/ifaces/vlan999/options
-```
-
-· Зачем: Проверка конфигурации одного из VLAN.
-
-```bash
 echo '192.168.100.1/27' > /etc/net/ifaces/vlan100/ipv4address
 echo '192.168.200.1/28' > /etc/net/ifaces/vlan200/ipv4address
 echo '192.168.99.1/29' > /etc/net/ifaces/vlan999/ipv4address
-```
-
-· Зачем: Назначение IP-адресов VLAN-интерфейсам (шлюзы для подсетей).
-
----
 
 5. Включение IP-форвардинга
 
-```bash
 sed -i 's/net.ipv4.ip_forward = 0/net.ipv4.ip_forward = 1/' /etc/net/sysctl.conf
-```
-
-· Примечание: См. объяснение в ISP.txt.
-
----
 
 6. Настройка GRE-туннеля
 
-· Примечание: Аналогично BR-RTR.txt, но с TUNLOCAL=172.16.1.2 и TUNREMOTE=172.16.2.2.
-
-```bash
 echo "10.10.10.1/30" > /etc/net/ifaces/gre1/ipv4address
-```
 
-· Зачем: Назначение внутреннего адреса туннелю (сеть 10.10.10.0/30).
-
-```bash
 ping 10.10.10.2 -c 3
-```
 
-· Зачем: Проверка связи через туннель с BR-RTR.
-
-```bash
 ping zz.ru -c 2
-```
-
-· Зачем: Проверка выхода в интернет.
-
----
 
 7. Установка ПО
 
-```bash
 apt-get update && apt-get install sudo tzdata frr dnsmasq nftables -y
-```
-
-· dnsmasq – лёгкий DHCP- и DNS-сервер.
-· Зачем: Для раздачи IP-адресов клиентам (VLAN 200).
-
----
 
 8. Настройка DNS
 
-```bash
 rm -f /etc/net/ifaces/enp7s1/resolv.conf
 echo $'search au-team.irpo\nnameserver 192.168.100.2' > /etc/net/ifaces/vlan100/resolv.conf
-```
-
-· Зачем: Указывает, что DNS-запросы должны идти на HQ-SRV.
-
----
 
 9. Настройка NAT (nftables)
 
 · Примечание: Аналогично ISP.txt.
 
----
-
 10. Установка временной зоны
 
-```bash
-timedatectl set-timezone Europe/Moscow
-```
-
-· Примечание: См. объяснение в BR-RTR.txt.
-
----
+timedatectl set-timezone Asia/Yekaterinburg
 
 11. Создание пользователя net_admin
 
 · Примечание: Аналогично BR-RTR.txt.
 
----
-
 12. Настройка OSPF
 
 · Примечание: Аналогично BR-RTR.txt, но с добавлением VLAN-интерфейсов в OSPF.
 
-```bash
 interface vlan100
  ip ospf area 0
 exit
-```
-
-· Зачем: Анонсирование сети VLAN 100 через OSPF.
-
----
 
 13. Настройка DHCP (dnsmasq)
 
-```bash
 sed -i 's/AUTO_LOCAL_RESOLVER=yes/AUTO_LOCAL_RESOLVER=no/' /etc/sysconfig/dnsmasq
-```
 
-· Зачем: Отключает локальный резолвер dnsmasq, чтобы не конфликтовать с Bind9.
-
-```bash
 grep AUTO_LOCAL_RESOLVER /etc/sysconfig/dnsmasq
-```
 
-· Зачем: Проверка изменения.
-
-```bash
 cat <<'EOF' > /etc/dnsmasq.conf
 port=0
 interface=vlan200
@@ -613,276 +207,159 @@ dhcp-option=3,192.168.200.1
 dhcp-option=6,192.168.100.2
 leasefile-ro
 EOF
-```
 
-· port=0 – отключает DNS-сервер dnsmasq (только DHCP).
-· interface=vlan200 – слушать на VLAN 200.
-· listen-address=192.168.200.1 – адрес интерфейса для DHCP.
-· dhcp-authoritative – сервер является авторитетным для этой подсети.
-· dhcp-range – диапазон адресов: только один адрес 192.168.200.2 для HQ-CLI.
-· dhcp-option=3 – опция шлюза по умолчанию.
-· dhcp-option=6 – опция DNS-сервера.
-· leasefile-ro – файл аренды только для чтения (для безопасности).
-· Зачем: Автоматическая выдача IP-адреса HQ-CLI с правильным шлюзом и DNS.
-
-```bash
 systemctl enable --now frr dnsmasq
-```
 
-· Зачем: Запуск служб маршрутизации и DHCP.
-
-```bash
 ss -lun | grep 67
-```
-
-· ss -lun – показывает слушающие UDP-сокеты.
-· 67 – порт DHCP-сервера.
-· Зачем: Проверка, что DHCP-сервер запущен.
-
----
 
 14. Проверка конфигурации
 
-```bash
 systemctl restart network
 cat /etc/resolv.conf
 ip r | grep ospf
-```
 
-· ip r | grep ospf – фильтрует маршруты, полученные через OSPF.
-· Зачем: Проверка работы OSPF.
-
----
-
-## Файл 04 [[HQ-SRV]]
-
-Назначение файла
-
-Настройка основного сервера HQ, включая сеть, DNS (Bind9), SSH и пользователей.
-
----
+HQ-SRV
 
 1. Установка имени хоста и временной зоны
 
-```bash
 hostnamectl hostname HQ-SRV.au-team.irpo
 exec bash
-timedatectl set-timezone Europe/Moscow
-```
-
-· Примечание: См. объяснение в BR-RTR.txt.
-
----
+timedatectl set-timezone Asia/Yekaterinburg
 
 2. Настройка интерфейса
 
-```bash
 echo 'TYPE=eth' > /etc/net/ifaces/enp7s1/options
 echo '192.168.100.2/27' > /etc/net/ifaces/enp7s1/ipv4address
 echo 'default via 192.168.100.1' > /etc/net/ifaces/enp7s1/ipv4route
 echo 'nameserver 8.8.8.8' > /etc/net/ifaces/enp7s1/resolv.conf
-```
-
-· Примечание: Аналогично предыдущим файлам, но для сервера в VLAN 100.
-
-```bash
 systemctl restart network
 ping zz.ru -c3
-```
-
-· Зачем: Проверка выхода в интернет.
-
----
 
 3. Создание пользователя sshuser
 
-```bash
 useradd -u 2026 sshuser
-```
-
-· -u 2026 – устанавливает UID пользователя равным 2026 (по заданию).
-· Зачем: Создание пользователя с фиксированным UID.
-
-```bash
 echo "sshuser:P@ssw0rd" | chpasswd
 usermod -aG wheel sshuser
 echo "WHEEL_USERS ALL=(ALL:ALL) NOPASSWD: ALL" > /etc/sudoers.d/sshuser
-```
-
-· Примечание: Аналогично net_admin.
-
-```bash
 su -l sshuser
 sudo id
-```
-
-· Зачем: Проверка входа и прав sudo.
-
----
 
 4. Настройка SSH
 
-```bash
 echo "Authorized access only" > /etc/openssh/banner
-```
-
-· Зачем: Создание баннера при подключении по SSH.
-
-```bash
 echo -e "Port 2026\nMaxAuthTries 2\nAllowUsers sshuser\nBanner /etc/openssh/banner\n" >> /etc/openssh/sshd_config
-```
-
-· Port 2026 – изменение порта SSH на нестандартный (по заданию).
-· MaxAuthTries 2 – максимум 2 попытки ввода пароля.
-· AllowUsers sshuser – разрешает вход только пользователю sshuser.
-· >> – добавляет строки в конец файла.
-· Зачем: Повышение безопасности SSH.
-
-```bash
 systemctl restart sshd
 ss -ltnp | grep sshd
-```
-
-· ss -ltnp – показывает TCP-сокеты с процессами.
-· Зачем: Проверка, что SSH слушает на порту 2026.
-
-```bash
 ssh sshuser@127.0.0.1 -p 2026
-```
-
-· Зачем: Локальная проверка подключения по SSH.
-
----
 
 5. Установка Bind9
 
-```bash
 apt-get update && apt-get install bind bind-utils -y
-```
-
-· Зачем: Для развёртывания DNS-сервера.
-
-```bash
 echo $'search au-team.irpo\nnameserver 127.0.0.1' > /etc/net/ifaces/enp7s1/resolv.conf
-```
-
-· Зачем: Настройка сервера использовать свой же DNS.
-
----
 
 6. Настройка Bind9
 
-```bash
-rndc-confgen -a -c /etc/bind/rndc.key
-```
-
-· rndc – утилита управления Bind9.
-· -a – автоматическая генерация ключа.
-· -c – указание файла ключа.
-· Зачем: Создание ключа для безопасного управления DNS-сервером.
-
-```bash
 cat <<'EOF' > /etc/bind/options.conf
-...
+logging { };
+options {
+ listen-on { localnets; 127.0.0.1; };
+ forwarders { 77.88.8.7; 77.88.8.3; };
+ recursion yes;
+ allow-recursion { any; };
+ allow-query { any; };
+ dnssec-validation no;
+ 
+ directory "/etc/bind/zone";
+ dump-file "/var/run/named/named_dump.db";
+ statistics-file "/var/run/named/named.stats";
+ recursing-file "/var/run/named/named.recursing"; 
+ secroots-file "/var/run/named/named.scroots";
+ pid-file none;
+};
+zone "au-team.irpo" {
+ type master;
+ file "au-team.irpo";
+};
+zone "168.192.in-addr.arpa" {
+ type master;
+ file "168.192.in-addr.arpa";
+};
 EOF
-```
++++
 
-· listen-on { localnets; 127.0.0.1; }; – слушать на локальных интерфейсах.
-· forwarders { 77.88.8.7; 77.88.8.3; }; – DNS Яндекса для пересылки запросов.
-· recursion yes – разрешает рекурсивные запросы.
-· allow-recursion { any; } – разрешает рекурсию для всех.
-· dnssec-validation no – отключает проверку DNSSEC (для упрощения).
-· zone "au-team.irpo" – зона прямого просмотра.
-· zone "168.192.in-addr.arpa" – зона обратного просмотра для подсети 192.168.0.0/16.
-· Зачем: Конфигурация основных параметров DNS-сервера.
-
-```bash
++++
 cat <<'EOF' > /etc/bind/zone/au-team.irpo
-...
+$TTL  1D
+@    IN   SOA   au-team.irpo. root.au-team.irpo. (
+                2025020600 ; serial
+                12H        ; refresh
+                1H         ; retry
+                1W         ; expire
+                1H         ; ncache
+            )
+@       IN  NS    hq-srv.au-team.irpo.
+hq-rtr  IN   A    192.168.100.1
+hq-srv  IN   A    192.168.100.2
+hq-cli  IN   A    192.168.200.2
+br-rtr  IN   A    192.168.1.1
+br-srv  IN   A    192.168.1.2
+docker  IN   A    172.16.1.1
+web     IN   A    172.16.2.1
+
 EOF
-```
 
-· SOA – Start of Authority, начальная запись зоны.
-· NS – запись DNS-сервера для зоны.
-· A – записи соответствия имён IPv4-адресам.
-· Зачем: Создание зоны прямого просмотра с записями для всех устройств.
 
-```bash
+
+
+
+
+
 cat <<'EOF' > /etc/bind/zone/168.192.in-addr.arpa
-...
+$TTL  1D
+@    IN   SOA   au-team.irpo. root.au-team.irpo. (
+                2025020600 ; serial
+                12H        ; refresh
+                1H         ; retry
+                1W         ; expire
+                1H         ; ncache
+            )
+      IN   NS    au-team.irpo.
+1.100 IN   PTR   hq-rtr.au-team.irpo.
+2.100 IN   PTR   hq-srv.au-team.irpo.
+2.200 IN   PTR   hq-cli.au-team.irpo.
 EOF
-```
-
-· PTR – записи обратного просмотра (IP → имя).
-· Зачем: Создание зоны обратного просмотра для разрешения IP-адресов в имена.
-
-```bash
 chown :named /etc/bind/zone/au-team.irpo /etc/bind/zone/168.192.in-addr.arpa
-```
-
-· chown :named – изменяет группу файлов на named (пользователь Bind9).
-· Зачем: Чтобы Bind9 мог читать файлы зон.
-
-```bash
 systemctl enable --now bind
-```
 
-· Зачем: Запуск и автозагрузка DNS-сервера.
-
----
-
-7. Проверка DNS
-
-```bash
 service network restart
 host br-rtr
 host -t PTR 192.168.100.2
-```
 
-· host – утилита DNS-запросов.
-· -t PTR – запрос обратной записи.
-· Зачем: Проверка работы DNS (прямого и обратного просмотра).
+7. Проверка DNS
 
----
+service network restart
+host br-rtr
+host -t PTR 192.168.100.2
 
-## Файл 05 [[Образование/Колледж/Мдк/Демо/модуль 1/BR-SRV|BR-SRV]]
+BR-SRV
 
 Назначение файла
-
-Настройка сервера BR и клиента HQ.
-
----
-
 Часть BR-SRV
 
 1. Установка имени хоста и временной зоны
 
-```bash
 hostnamectl hostname BR-SRV.au-team.irpo
 exec bash
-timedatectl set-timezone Europe/Moscow
-```
-
-· Примечание: См. ранее.
+timedatectl set-timezone Asia/Yekaterinburg
 
 2. Настройка интерфейса
 
-```bash
 echo 'TYPE=eth' > /etc/net/ifaces/enp7s1/options
 echo '192.168.1.2/26' > /etc/net/ifaces/enp7s1/ipv4address
 echo 'default via 192.168.1.1' > /etc/net/ifaces/enp7s1/ipv4route
 echo $'search au-team.irpo\nnameserver 192.168.100.2' > /etc/net/ifaces/enp7s1/resolv.conf
-```
-
-· Примечание: Аналогично HQ-SRV, но в другой подсети (192.168.1.0/26 – опечатка в задании? Должно быть /28).
-
-```bash
 systemctl restart network
 ping hq-srv -c 3
-```
-
-· Зачем: Проверка связи с HQ-SRV через туннель.
-
 3. Создание sshuser
 
 · Примечание: Аналогично HQ-SRV.
@@ -891,60 +368,14 @@ ping hq-srv -c 3
 
 · Примечание: Аналогично HQ-SRV.
 
----
-
 Часть HQ-CLI
 
 1. Установка имени хоста и временной зоны
 
-```bash
 hostnamectl hostname HQ-CLI.au-team.irpo
 exec bash
-timedatectl set-timezone Europe/Moscow
-```
-
-· Примечание: См. ранее.
+timedatectl set-timezone Asia/Yekaterinburg
 
 2. Проверка интерфейсов
 
-```bash
 ip -br -c a
-```
-
-· Зачем: Проверка получения IP-адреса по DHCP.
-
----
-
-## Файл проверка.txt
-
-Назначение файла
-
-Чек-лист для проверки выполнения всех задач экзамена.
-
----
-
-Общие принципы
-
-Каждый блок содержит команды для проверки определённого аспекта настройки:
-
-· ip -4 a – показать IPv4-адреса всех интерфейсов.
-· show ip interfaces – аналог для EcoRouterOS.
-· timedatectl show | grep Timezone – проверка временной зоны.
-· ip r | grep ospf – проверка OSPF-маршрутов.
-· vtysh -c 'sh ip ospf interface' – проверка OSPF-интерфейсов через FRR.
-· dhcpcd -n – проверка DHCP-клиента.
-· ss -lnu | grep 67 – проверка работающего DHCP-сервера.
-· ping 8.8.8.8 -c3 – проверка выхода в интернет.
-· host имя – проверка DNS.
-· ssh -p 2026 – проверка SSH на нестандартном порту.
-· ip -d l sh type vlan – проверка VLAN-интерфейсов.
-
----
-
-Итоговые рекомендации
-
-1. Соблюдайте порядок выполнения – начните с ISP, затем HQ-RTR, BR-RTR, HQ-SRV, BR-SRV, HQ-CLI.
-2. Проверяйте каждую команду – используйте ping, ip a, systemctl status.
-3. Следите за синтаксисом – ALT Linux использует /etc/net/ifaces/ для конфигурации сети.
-4. Документируйте – сохраняйте вывод команд для отчёта (скриншоты).
-5. Тестируйте связность – между всеми узлами и интернетом.
